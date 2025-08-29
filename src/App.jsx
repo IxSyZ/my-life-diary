@@ -306,7 +306,7 @@ export default function App() {
                 batch.delete(doc.ref);
             });
             await batch.commit();
-        } catch (error) => {
+        } catch (error) {
             console.error("Error deleting all notes:", error);
         }
         setShowDeleteConfirm(false);
