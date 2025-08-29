@@ -23,10 +23,8 @@ import {
 import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, Sun, Moon, LogOut } from 'lucide-react';
 
 // --- PWA Setup ---
-// This effect runs once to set up the PWA capabilities. No changes needed here.
 const PWASetup = () => {
     useEffect(() => {
-        // 1. Create and inject the Web App Manifest
         const manifest = {
             short_name: "Life Diary",
             name: "My Life Diary",
@@ -61,8 +59,6 @@ const PWASetup = () => {
         themeColorMeta.content = manifest.theme_color;
         document.head.appendChild(themeColorMeta);
 
-
-        // 2. Register the Service Worker
         const serviceWorkerCode = `
             self.addEventListener('fetch', () => { /* no-op */ });
         `;
@@ -71,12 +67,8 @@ const PWASetup = () => {
             const swBlob = new Blob([serviceWorkerCode], { type: 'application/javascript' });
             const swUrl = URL.createObjectURL(swBlob);
             navigator.serviceWorker.register(swUrl)
-                .then(registration => {
-                    console.log('ServiceWorker registration successful');
-                })
-                .catch(err => {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
+                .then(registration => console.log('ServiceWorker registration successful'))
+                .catch(err => console.log('ServiceWorker registration failed: ', err));
         }
 
     }, []);
@@ -84,21 +76,17 @@ const PWASetup = () => {
     return null;
 };
 
-
 // --- Firebase Configuration ---
 let firebaseConfig;
 let configError = null;
 
 try {
-    // This will throw an error in non-Vite environments (like the preview), which is caught below.
     const configString = import.meta.env.VITE_FIREBASE_CONFIG; 
     if (!configString || configString === 'undefined') {
          throw new Error("VITE_FIREBASE_CONFIG is not defined in the environment. Please set it in Vercel.");
     }
     firebaseConfig = JSON.parse(configString);
 } catch (e) {
-    // We are likely in the preview environment, so let's try the global variable.
-    console.log("Could not find Vercel env variables, attempting to use preview config.");
     if (typeof __firebase_config !== 'undefined' && __firebase_config) {
         try {
             firebaseConfig = JSON.parse(__firebase_config);
@@ -108,13 +96,11 @@ try {
              firebaseConfig = { apiKey: "error", authDomain: "error", projectId: "error" };
         }
     } else {
-        // Neither method worked.
         console.error("Firebase config error: Neither Vercel env nor preview config found.", e);
         configError = "Could not load Firebase configuration. Please ensure the VITE_FIREBASE_CONFIG environment variable is set correctly in your hosting provider (Vercel).";
         firebaseConfig = { apiKey: "error", authDomain: "error", projectId: "error" };
     }
 }
-
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig);
@@ -128,7 +114,7 @@ const SignIn = () => {
         signInWithPopup(auth, provider)
             .catch((error) => {
                 console.error("Google Sign-In error", error);
-                alert("Sign-in failed. Make sure your domain is authorized in Firebase. Error: " + error.message);
+                alert("Sign-in failed. Error: " + error.message);
             });
     };
 
@@ -148,7 +134,6 @@ const SignIn = () => {
         </div>
     );
 };
-
 
 // --- Main App Component ---
 export default function App() {
@@ -204,7 +189,6 @@ export default function App() {
             setNotes([]);
             return;
         };
-        // This path is now simpler and doesn't rely on a special appId
         const notesCollectionPath = `users/${user.uid}/notes`;
         const q = query(collection(db, notesCollectionPath));
         
@@ -255,7 +239,6 @@ export default function App() {
         recognitionRef.current = recognition;
     }, [user, language]);
 
-
     // --- Search Expansion Effect ---
     useEffect(() => {
         if (searchTerm.trim() === '') {
@@ -282,7 +265,6 @@ export default function App() {
         setExpandedItems(newExpanded);
 
     }, [searchTerm, notes]);
-
 
     // --- Note Management Functions ---
     const addNote = async (text) => {
@@ -324,7 +306,7 @@ export default function App() {
                 batch.delete(doc.ref);
             });
             await batch.commit();
-        } catch (error) {
+        } catch (error) => {
             console.error("Error deleting all notes:", error);
         }
         setShowDeleteConfirm(false);
@@ -451,9 +433,10 @@ export default function App() {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white font-sans flex flex-col transition-colors duration-300">
             <PWASetup />
-            <header className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
+            {/* --- Updated Header for Responsiveness --- */}
+            <header className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-4 sticky top-0 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
                 <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">My Life Diary</h1>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                     <button 
                         onClick={toggleTheme}
                         className="p-2 rounded-lg bg-gray-200 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
@@ -465,7 +448,7 @@ export default function App() {
                         <select
                             value={language}
                             onChange={(e) => setLanguage(e.target.value)}
-                            className="bg-gray-200 dark:bg-gray-800/50 text-gray-800 dark:text-white rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            className="bg-gray-200 dark:bg-gray-800/50 text-gray-800 dark:text-white rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm"
                         >
                             <option value="en-US">English</option>
                             <option value="fr-FR">Français</option>
@@ -474,23 +457,23 @@ export default function App() {
                      {notes.length > 0 && (
                         <button 
                             onClick={deleteAllNotes}
-                            className="flex items-center gap-2 bg-red-500/20 text-red-400 px-4 py-2 rounded-lg hover:bg-red-500/30 transition-all"
+                            className="flex items-center gap-2 bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 transition-all text-sm"
                         >
                             <Trash2 size={16} />
-                            Delete All
+                            <span className="hidden sm:inline">Delete All</span>
                         </button>
                     )}
                     <button
                         onClick={() => signOut(auth)}
-                        className="flex items-center gap-2 bg-gray-500/20 text-gray-400 px-4 py-2 rounded-lg hover:bg-gray-500/30 transition-all"
+                        className="flex items-center gap-2 bg-gray-500/20 text-gray-400 px-3 py-2 rounded-lg hover:bg-gray-500/30 transition-all text-sm"
                     >
                        <LogOut size={16} />
-                        Sign Out
+                       <span className="hidden sm:inline">Sign Out</span>
                     </button>
                 </div>
             </header>
 
-            <main className="flex-grow p-6 overflow-y-auto pb-32">
+            <main className="flex-grow p-4 sm:p-6 overflow-y-auto pb-32">
                  <div className="max-w-3xl mx-auto">
                     <div className="relative mb-6">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
