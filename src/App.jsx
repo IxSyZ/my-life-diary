@@ -3,7 +3,9 @@ import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
     onAuthStateChanged,
-    signInAnonymously
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut
 } from 'firebase/auth';
 import { 
     getFirestore, 
@@ -18,10 +20,10 @@ import {
     Timestamp,
     getDocs
 } from 'firebase/firestore';
-import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, Sun, Moon } from 'lucide-react';
+import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, Sun, Moon, LogOut } from 'lucide-react';
 
 // --- PWA Setup ---
-// This effect runs once to set up the PWA capabilities
+// This effect runs once to set up the PWA capabilities. No changes needed here.
 const PWASetup = () => {
     useEffect(() => {
         // 1. Create and inject the Web App Manifest
@@ -62,33 +64,7 @@ const PWASetup = () => {
 
         // 2. Register the Service Worker
         const serviceWorkerCode = `
-            const CACHE_NAME = 'life-diary-cache-v1';
-            const urlsToCache = [
-                '/',
-                'index.html' // Though in this environment, '/' is the most important
-            ];
-
-            self.addEventListener('install', event => {
-                event.waitUntil(
-                    caches.open(CACHE_NAME)
-                        .then(cache => {
-                            console.log('Opened cache');
-                            return cache.addAll(urlsToCache);
-                        })
-                );
-            });
-
-            self.addEventListener('fetch', event => {
-                event.respondWith(
-                    caches.match(event.request)
-                        .then(response => {
-                            if (response) {
-                                return response; // Serve from cache
-                            }
-                            return fetch(event.request); // Fetch from network
-                        })
-                );
-            });
+            self.addEventListener('fetch', () => { /* no-op */ });
         `;
 
         if ('serviceWorker' in navigator) {
@@ -96,7 +72,7 @@ const PWASetup = () => {
             const swUrl = URL.createObjectURL(swBlob);
             navigator.serviceWorker.register(swUrl)
                 .then(registration => {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    console.log('ServiceWorker registration successful');
                 })
                 .catch(err => {
                     console.log('ServiceWorker registration failed: ', err);
@@ -105,21 +81,74 @@ const PWASetup = () => {
 
     }, []);
 
-    return null; // This component doesn't render anything
+    return null;
 };
 
 
 // --- Firebase Configuration ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-    ? JSON.parse(__firebase_config) 
-    : { apiKey: "your-api-key", authDomain: "your-auth-domain", projectId: "your-project-id" };
+let firebaseConfig;
+let configError = null;
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+try {
+    // This will throw an error in non-Vite environments (like the preview), which is caught below.
+    const configString = import.meta.env.VITE_FIREBASE_CONFIG; 
+    if (!configString || configString === 'undefined') {
+         throw new Error("VITE_FIREBASE_CONFIG is not defined in the environment. Please set it in Vercel.");
+    }
+    firebaseConfig = JSON.parse(configString);
+} catch (e) {
+    // We are likely in the preview environment, so let's try the global variable.
+    console.log("Could not find Vercel env variables, attempting to use preview config.");
+    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        try {
+            firebaseConfig = JSON.parse(__firebase_config);
+        } catch (parseError) {
+             console.error("Firebase config (preview) parse error:", parseError);
+             configError = "Could not parse the Firebase configuration provided in the preview environment.";
+             firebaseConfig = { apiKey: "error", authDomain: "error", projectId: "error" };
+        }
+    } else {
+        // Neither method worked.
+        console.error("Firebase config error: Neither Vercel env nor preview config found.", e);
+        configError = "Could not load Firebase configuration. Please ensure the VITE_FIREBASE_CONFIG environment variable is set correctly in your hosting provider (Vercel).";
+        firebaseConfig = { apiKey: "error", authDomain: "error", projectId: "error" };
+    }
+}
+
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// --- SignIn Component ---
+const SignIn = () => {
+    const signInWithGoogle = () => {
+        const provider = new GoogleAuthProvider();
+        signInWithPopup(auth, provider)
+            .catch((error) => {
+                console.error("Google Sign-In error", error);
+                alert("Sign-in failed. Make sure your domain is authorized in Firebase. Error: " + error.message);
+            });
+    };
+
+    return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-center p-4">
+             <h1 className="text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 mb-4">
+                My Life Diary
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 mb-8 text-lg">Your personal voice-powered journal.</p>
+            <button
+                onClick={signInWithGoogle}
+                className="flex items-center gap-4 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+            >
+                <svg className="w-6 h-6" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                Sign in with Google
+            </button>
+        </div>
+    );
+};
+
 
 // --- Main App Component ---
 export default function App() {
@@ -158,14 +187,12 @@ export default function App() {
 
     // --- Authentication ---
     useEffect(() => {
+        if (configError) {
+            setAuthReady(true);
+            return;
+        };
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser);
-            } else {
-                signInAnonymously(auth).catch((error) => {
-                    console.error("Anonymous sign-in failed:", error);
-                });
-            }
+            setUser(currentUser);
             setAuthReady(true);
         });
         return () => unsubscribe();
@@ -173,12 +200,12 @@ export default function App() {
 
     // --- Firestore Data Fetching ---
     useEffect(() => {
-        if (!user) {
+        if (!user || configError) {
             setNotes([]);
             return;
         };
-
-        const notesCollectionPath = `artifacts/${appId}/users/${user.uid}/notes`;
+        // This path is now simpler and doesn't rely on a special appId
+        const notesCollectionPath = `users/${user.uid}/notes`;
         const q = query(collection(db, notesCollectionPath));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -232,7 +259,7 @@ export default function App() {
     // --- Search Expansion Effect ---
     useEffect(() => {
         if (searchTerm.trim() === '') {
-            setExpandedItems({}); // Collapse all when search is cleared
+            setExpandedItems({}); 
             return;
         }
         const pastMatchingNotes = notes.filter(note => 
@@ -260,7 +287,7 @@ export default function App() {
     // --- Note Management Functions ---
     const addNote = async (text) => {
         if (!user || !text.trim()) return;
-        const notesCollectionPath = `artifacts/${appId}/users/${user.uid}/notes`;
+        const notesCollectionPath = `users/${user.uid}/notes`;
         try {
             await addDoc(collection(db, notesCollectionPath), {
                 text: text.trim(),
@@ -273,7 +300,7 @@ export default function App() {
     
     const deleteNote = async (id) => {
         if (!user) return;
-        const noteDocPath = `artifacts/${appId}/users/${user.uid}/notes/${id}`;
+        const noteDocPath = `users/${user.uid}/notes/${id}`;
         try {
             await deleteDoc(doc(db, noteDocPath));
         } catch (error) {
@@ -287,7 +314,7 @@ export default function App() {
 
     const handleConfirmDeleteAll = async () => {
         if (!user) return;
-        const notesCollectionPath = `artifacts/${appId}/users/${user.uid}/notes`;
+        const notesCollectionPath = `users/${user.uid}/notes`;
         const q = query(collection(db, notesCollectionPath));
         
         try {
@@ -310,7 +337,7 @@ export default function App() {
 
     const saveEdit = async () => {
         if (!user || !editingNote) return;
-        const noteDocPath = `artifacts/${appId}/users/${user.uid}/notes/${editingNote.id}`;
+        const noteDocPath = `users/${user.uid}/notes/${editingNote.id}`;
         try {
             await updateDoc(doc(db, noteDocPath), {
                 text: editText
@@ -402,8 +429,23 @@ export default function App() {
         </div>
     );
     
-    if (!authReady || !user) {
-        return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">Loading...</div>; // Or a spinner
+    if (configError) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-center p-4">
+                 <div className="bg-red-100 dark:bg-red-900/20 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg relative max-w-lg">
+                    <strong className="font-bold">Configuration Error!</strong>
+                    <span className="block sm:inline ml-2">{configError}</span>
+                </div>
+            </div>
+        );
+    }
+    
+    if (!authReady) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">Loading...</div>;
+    }
+
+    if (!user) {
+        return <SignIn />;
     }
 
     return (
@@ -438,6 +480,13 @@ export default function App() {
                             Delete All
                         </button>
                     )}
+                    <button
+                        onClick={() => signOut(auth)}
+                        className="flex items-center gap-2 bg-gray-500/20 text-gray-400 px-4 py-2 rounded-lg hover:bg-gray-500/30 transition-all"
+                    >
+                       <LogOut size={16} />
+                        Sign Out
+                    </button>
                 </div>
             </header>
 
