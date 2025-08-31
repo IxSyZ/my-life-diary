@@ -46,19 +46,31 @@ const PWASetup = () => {
         themeColorMeta.content = manifest.theme_color;
         document.head.appendChild(themeColorMeta);
         
-        // This service worker is essential for the PWA install prompt.
         const serviceWorkerCode = `
-            const CACHE_NAME = 'my-life-diary-cache-v2'; // Updated cache name
-            const urlsToCache = [
-                '/',
-                '/index.html',
-                '/MyLifeDiaryLogo.png'
-            ];
+            const CACHE_NAME = 'my-life-diary-cache-v3'; // Incremented cache version
+            const urlsToCache = ['/', '/index.html', '/MyLifeDiaryLogo.png'];
+            
             self.addEventListener('install', (event) => {
                 event.waitUntil(
                     caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
                 );
             });
+
+            self.addEventListener('activate', (event) => {
+                const cacheWhitelist = [CACHE_NAME];
+                event.waitUntil(
+                    caches.keys().then((cacheNames) => {
+                        return Promise.all(
+                            cacheNames.map((cacheName) => {
+                                if (cacheWhitelist.indexOf(cacheName) === -1) {
+                                    return caches.delete(cacheName);
+                                }
+                            })
+                        );
+                    })
+                );
+            });
+
             self.addEventListener('fetch', (event) => {
                 event.respondWith(
                     caches.match(event.request).then((response) => response || fetch(event.request))
@@ -156,7 +168,6 @@ export default function App() {
     const [firestoreError, setFirestoreError] = useState(null);
     const [installPromptEvent, setInstallPromptEvent] = useState(null);
     const colorPickerRef = useRef(null);
-
     const recognitionRef = useRef(null);
     const transcriptRef = useRef("");
 
