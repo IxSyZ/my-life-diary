@@ -21,7 +21,7 @@ import {
     Timestamp,
     getDocs
 } from 'firebase/firestore';
-import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette, BookPlus } from 'lucide-react';
+import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette } from 'lucide-react';
 
 // --- PWA Setup ---
 const PWASetup = () => {
@@ -47,15 +47,35 @@ const PWASetup = () => {
         document.head.appendChild(themeColorMeta);
         
         // This service worker is essential for the PWA install prompt.
-        // NOTE: It will show a console error in the chat preview environment due to blob URL restrictions,
+        // NOTE: It may show a console error in the chat preview environment due to blob URL restrictions,
         // but it will work correctly on your deployed Vercel app.
         const serviceWorkerCode = `
+            const CACHE_NAME = 'my-life-diary-cache-v1';
+            const urlsToCache = [
+                '/',
+                '/index.html',
+                '/MyLifeDiaryLogo.png'
+            ];
+
+            self.addEventListener('install', (event) => {
+                event.waitUntil(
+                    caches.open(CACHE_NAME)
+                        .then((cache) => {
+                            console.log('Opened cache');
+                            return cache.addAll(urlsToCache);
+                        })
+                );
+            });
+
             self.addEventListener('fetch', (event) => {
-                // This is a simple cache-first strategy.
                 event.respondWith(
-                    caches.match(event.request).then((response) => {
-                        return response || fetch(event.request);
-                    })
+                    caches.match(event.request)
+                        .then((response) => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request);
+                        })
                 );
             });
         `;
@@ -147,7 +167,6 @@ export default function App() {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedItems, setExpandedItems] = useState({});
     const [themeColor, setThemeColor] = useState('#2d3748');
-    const [isLoadingSamples, setIsLoadingSamples] = useState(false);
     const [firestoreError, setFirestoreError] = useState(null);
     const colorPickerRef = useRef(null);
 
@@ -248,34 +267,6 @@ export default function App() {
         setEditingNote(null); setEditText("");
     };
 
-    // --- Sample Data ---
-    const loadSampleData = async () => {
-        if (!user || isLoadingSamples) return;
-        setIsLoadingSamples(true);
-        try {
-            const batch = writeBatch(db);
-            const sampleNotes = [
-                { text: "This is a note from today.", date: new Date() },
-                { text: "And another one from today.", date: new Date() },
-                { text: "A note from yesterday.", date: new Date(Date.now() - 86400000) },
-                { text: "A note from last month.", date: new Date(new Date().setMonth(new Date().getMonth() - 1)) },
-                { text: "An entry from July 2024.", date: new Date('2024-07-15T10:00:00') },
-                { text: "Thinking about the new year, back in January 2024.", date: new Date('2024-01-20T15:30:00') },
-                { text: "A memory from a different year entirely.", date: new Date('2023-11-05T12:00:00') },
-            ];
-            sampleNotes.forEach(note => {
-                const docRef = doc(collection(db, `users/${user.uid}/notes`));
-                batch.set(docRef, { text: note.text, timestamp: Timestamp.fromDate(note.date) });
-            });
-            await batch.commit();
-        } catch (error) {
-            console.error("Error loading sample data:", error);
-            alert("Failed to load sample data. Please check your Firestore security rules and internet connection.");
-        } finally {
-            setIsLoadingSamples(false);
-        }
-    };
-
     // --- UI Handlers ---
     const handleRecordStart = () => { if (micError || !recognitionRef.current) return; transcriptRef.current = ""; setIsRecording(true); recognitionRef.current.start(); };
     const handleRecordStop = () => { if (micError || !recognitionRef.current || !isRecording) return; recognitionRef.current.stop(); };
@@ -325,7 +316,6 @@ export default function App() {
                     <input type="color" ref={colorPickerRef} value={themeColor} onChange={e => setThemeColor(e.target.value)} className="w-0 h-0 opacity-0 absolute"/>
                     <div className="relative"><Languages size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" /><select value={language} onChange={e=>setLanguage(e.target.value)} className="rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none text-sm" style={{backgroundColor: subtleBgColor, color: textColor}}><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
                     {notes.length > 0 && <button onClick={()=>handleDeleteSelection({type:'all'})} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Trash2 size={16}/><span className="hidden sm:inline">Delete All</span></button>}
-                    {notes.length === 0 && <button onClick={loadSampleData} disabled={isLoadingSamples} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}>{isLoadingSamples ? 'Loading...' : <><BookPlus size={16}/><span className="hidden sm:inline">Load Samples</span></>}</button>}
                     <button onClick={()=>signOut(auth)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><LogOut size={16}/><span className="hidden sm:inline">Sign Out</span></button>
                 </div>
             </header>
