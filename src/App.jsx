@@ -189,13 +189,22 @@ export default function App() {
 
     // --- Search Expansion Effect ---
     useEffect(() => {
-        if (searchTerm.trim() === '') return; // <-- FIX: Do not collapse when search is cleared
+        if (searchTerm.trim() === '') {
+            setExpandedItems({}); // When search is cleared, collapse everything.
+            return;
+        }
         const matches = notes.filter(n => n.text.toLowerCase().includes(searchTerm.toLowerCase()) && n.timestamp?.toDate().toDateString() !== new Date().toDateString());
-        if (matches.length > 0) setShowPastNotes(true);
+        if (matches.length > 0) {
+            setShowPastNotes(true);
+        }
         const newExpanded = {};
-        matches.forEach(n => { const d = n.timestamp.toDate(); newExpanded[d.getFullYear()] = true; newExpanded[`${d.getFullYear()}-${d.toLocaleString('default',{month:'long'})}`] = true; });
-        setExpandedItems(prev => ({...prev, ...newExpanded})); // Merge with existing expanded items
-    }, [searchTerm, notes]);
+        matches.forEach(n => { 
+            const d = n.timestamp.toDate(); 
+            newExpanded[d.getFullYear()] = true; 
+            newExpanded[`${d.getFullYear()}-${d.toLocaleString('default', { month: 'long' })}`] = true; 
+        });
+        setExpandedItems(newExpanded);
+    }, [searchTerm]);
 
     // --- Note Management ---
     const addNote = async text => { if (user && text.trim()) await addDoc(collection(db, `users/${user.uid}/notes`), { text: text.trim(), timestamp: Timestamp.now() }); };
