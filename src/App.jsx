@@ -29,7 +29,7 @@ const PWASetup = () => {
         const manifest = {
             short_name: "Life Diary",
             name: "My Life Diary",
-            icons: [{ src: "/MyLifeDiaryLogo.jpg", type: "image/jpeg", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.jpg", type: "image/jpeg", sizes: "512x512" }],
+            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
             start_url: ".",
             display: "standalone",
             theme_color: "#2d3748",
@@ -104,7 +104,7 @@ const shadeColor = (color, percent) => {
 // --- SignIn Component ---
 const SignIn = ({ themeColor }) => (
     <div className="min-h-screen flex flex-col items-center justify-center text-center p-4 transition-colors duration-300" style={{ backgroundColor: themeColor, color: getTextColor(themeColor) }}>
-        <img src="/MyLifeDiaryLogo.jpg" alt="Logo" className="h-24 w-24 rounded-full mb-6" />
+        <img src="/MyLifeDiaryLogo.png" alt="Logo" className="h-24 w-24 rounded-full mb-6" />
         <h1 className="text-5xl font-bold tracking-tight mb-4">My Life Diary</h1>
         <p className="opacity-80 mb-8 text-lg">Your personal voice-powered journal.</p>
         <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => alert(e.message))} className="flex items-center gap-4 bg-white/20 backdrop-blur-sm font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-shadow" style={{ color: getTextColor(themeColor) }}>
@@ -189,12 +189,12 @@ export default function App() {
 
     // --- Search Expansion Effect ---
     useEffect(() => {
-        if (searchTerm.trim() === '') return setExpandedItems({});
+        if (searchTerm.trim() === '') return; // <-- FIX: Do not collapse when search is cleared
         const matches = notes.filter(n => n.text.toLowerCase().includes(searchTerm.toLowerCase()) && n.timestamp?.toDate().toDateString() !== new Date().toDateString());
         if (matches.length > 0) setShowPastNotes(true);
         const newExpanded = {};
         matches.forEach(n => { const d = n.timestamp.toDate(); newExpanded[d.getFullYear()] = true; newExpanded[`${d.getFullYear()}-${d.toLocaleString('default',{month:'long'})}`] = true; });
-        setExpandedItems(newExpanded);
+        setExpandedItems(prev => ({...prev, ...newExpanded})); // Merge with existing expanded items
     }, [searchTerm, notes]);
 
     // --- Note Management ---
@@ -292,7 +292,7 @@ export default function App() {
         <div className="min-h-screen font-sans flex flex-col transition-colors duration-300" style={{ backgroundColor: themeColor, color: textColor }}>
             <PWASetup />
             <header className="p-4 sm:p-6 border-b flex flex-wrap justify-between items-center gap-4 sticky top-0 backdrop-blur-sm z-10" style={{ borderColor: subtleBgColor, backgroundColor: shadeColor(themeColor, -5) + '80' }}>
-                <div className="flex items-center gap-3"><img src="/MyLifeDiaryLogo.jpg" alt="Logo" className="h-10 w-10 rounded-full" /><h1 className="text-3xl font-bold tracking-tight">My Life Diary</h1></div>
+                <div className="flex items-center gap-3"><img src="/MyLifeDiaryLogo.png" alt="Logo" className="h-10 w-10 rounded-full" /><h1 className="text-3xl font-bold tracking-tight">My Life Diary</h1></div>
                 <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                     <button onClick={() => colorPickerRef.current.click()} className="p-2 rounded-lg" style={{ backgroundColor: subtleBgColor }}><Palette size={20} /></button>
                     <input type="color" ref={colorPickerRef} value={themeColor} onChange={e => setThemeColor(e.target.value)} className="w-0 h-0 opacity-0 absolute"/>
