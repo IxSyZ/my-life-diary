@@ -21,7 +21,7 @@ import {
     Timestamp,
     getDocs
 } from 'firebase/firestore';
-import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette } from 'lucide-react';
+import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette, Download } from 'lucide-react';
 
 // --- PWA Setup ---
 const PWASetup = () => {
@@ -29,7 +29,7 @@ const PWASetup = () => {
         const manifest = {
             short_name: "Life Diary",
             name: "My Life Diary",
-            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
+            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "200x200" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
             start_url: ".",
             display: "standalone",
             theme_color: "#2d3748",
@@ -47,35 +47,21 @@ const PWASetup = () => {
         document.head.appendChild(themeColorMeta);
         
         // This service worker is essential for the PWA install prompt.
-        // NOTE: It may show a console error in the chat preview environment due to blob URL restrictions,
-        // but it will work correctly on your deployed Vercel app.
         const serviceWorkerCode = `
-            const CACHE_NAME = 'my-life-diary-cache-v1';
+            const CACHE_NAME = 'my-life-diary-cache-v2'; // Updated cache name
             const urlsToCache = [
                 '/',
                 '/index.html',
                 '/MyLifeDiaryLogo.png'
             ];
-
             self.addEventListener('install', (event) => {
                 event.waitUntil(
-                    caches.open(CACHE_NAME)
-                        .then((cache) => {
-                            console.log('Opened cache');
-                            return cache.addAll(urlsToCache);
-                        })
+                    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
                 );
             });
-
             self.addEventListener('fetch', (event) => {
                 event.respondWith(
-                    caches.match(event.request)
-                        .then((response) => {
-                            if (response) {
-                                return response;
-                            }
-                            return fetch(event.request);
-                        })
+                    caches.match(event.request).then((response) => response || fetch(event.request))
                 );
             });
         `;
@@ -168,10 +154,21 @@ export default function App() {
     const [expandedItems, setExpandedItems] = useState({});
     const [themeColor, setThemeColor] = useState('#2d3748');
     const [firestoreError, setFirestoreError] = useState(null);
+    const [installPromptEvent, setInstallPromptEvent] = useState(null);
     const colorPickerRef = useRef(null);
 
     const recognitionRef = useRef(null);
     const transcriptRef = useRef("");
+
+    // --- PWA Install Prompt Handling ---
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (event) => {
+            event.preventDefault();
+            setInstallPromptEvent(event);
+        };
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }, []);
 
     // --- Theme Management ---
     useEffect(() => {
@@ -227,19 +224,13 @@ export default function App() {
     // --- Search Expansion Effect ---
     useEffect(() => {
         if (searchTerm.trim() === '') {
-            setExpandedItems({}); // When search is cleared, collapse everything.
+            setExpandedItems({});
             return;
         }
         const matches = notes.filter(n => n.text.toLowerCase().includes(searchTerm.toLowerCase()) && n.timestamp?.toDate().toDateString() !== new Date().toDateString());
-        if (matches.length > 0) {
-            setShowPastNotes(true);
-        }
+        if (matches.length > 0) setShowPastNotes(true);
         const newExpanded = {};
-        matches.forEach(n => { 
-            const d = n.timestamp.toDate(); 
-            newExpanded[d.getFullYear()] = true; 
-            newExpanded[`${d.getFullYear()}-${d.toLocaleString('default', { month: 'long' })}`] = true; 
-        });
+        matches.forEach(n => { const d = n.timestamp.toDate(); newExpanded[d.getFullYear()] = true; newExpanded[`${d.getFullYear()}-${d.toLocaleString('default', { month: 'long' })}`] = true; });
         setExpandedItems(newExpanded);
     }, [searchTerm]);
 
@@ -268,6 +259,14 @@ export default function App() {
     };
 
     // --- UI Handlers ---
+    const handleInstallClick = () => {
+        if (installPromptEvent) {
+            installPromptEvent.prompt();
+            installPromptEvent.userChoice.then(() => {
+                setInstallPromptEvent(null);
+            });
+        }
+    };
     const handleRecordStart = () => { if (micError || !recognitionRef.current) return; transcriptRef.current = ""; setIsRecording(true); recognitionRef.current.start(); };
     const handleRecordStop = () => { if (micError || !recognitionRef.current || !isRecording) return; recognitionRef.current.stop(); };
     const toggleExpand = key => setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
@@ -312,6 +311,7 @@ export default function App() {
             <header className="p-4 sm:p-6 border-b flex flex-wrap justify-between items-center gap-4 sticky top-0 backdrop-blur-sm z-10" style={{ borderColor: subtleBgColor, backgroundColor: shadeColor(themeColor, -5) + '80' }}>
                 <div className="flex items-center gap-3"><img src="/MyLifeDiaryLogo.png" alt="Logo" className="h-10 w-10 rounded-full" /><h1 className="text-3xl font-bold tracking-tight">My Life Diary</h1></div>
                 <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+                    {installPromptEvent && <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Download size={16}/><span className="hidden sm:inline">Install App</span></button>}
                     <button onClick={() => colorPickerRef.current.click()} className="p-2 rounded-lg" style={{ backgroundColor: subtleBgColor }}><Palette size={20} /></button>
                     <input type="color" ref={colorPickerRef} value={themeColor} onChange={e => setThemeColor(e.target.value)} className="w-0 h-0 opacity-0 absolute"/>
                     <div className="relative"><Languages size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" /><select value={language} onChange={e=>setLanguage(e.target.value)} className="rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none text-sm" style={{backgroundColor: subtleBgColor, color: textColor}}><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
