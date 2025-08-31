@@ -46,8 +46,26 @@ const PWASetup = () => {
         themeColorMeta.content = manifest.theme_color;
         document.head.appendChild(themeColorMeta);
         
-        // Service Worker registration is removed as it's not supported in blob URLs (preview environment)
-        // It will work correctly when deployed on a real domain like Vercel.
+        // This service worker is essential for the PWA install prompt.
+        // NOTE: It will show a console error in the chat preview environment due to blob URL restrictions,
+        // but it will work correctly on your deployed Vercel app.
+        const serviceWorkerCode = `
+            self.addEventListener('fetch', (event) => {
+                // This is a simple cache-first strategy.
+                event.respondWith(
+                    caches.match(event.request).then((response) => {
+                        return response || fetch(event.request);
+                    })
+                );
+            });
+        `;
+        if ('serviceWorker' in navigator) {
+            const swBlob = new Blob([serviceWorkerCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(swBlob);
+            navigator.serviceWorker.register(swUrl)
+                .then(() => console.log('Service Worker registered successfully.'))
+                .catch(err => console.error('Service Worker registration failed:', err));
+        }
     }, []);
     return null;
 };
