@@ -26,68 +26,17 @@ import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, 
 // --- PWA Setup ---
 const PWASetup = () => {
     useEffect(() => {
-        const manifest = {
-            short_name: "Life Diary",
-            name: "My Life Diary",
-            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
-            start_url: ".",
-            display: "standalone",
-            theme_color: "#2d3748",
-            background_color: "#2d3748"
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(manifestBlob);
-        const linkEl = document.createElement('link');
-        linkEl.rel = 'manifest';
-        linkEl.href = manifestUrl;
-        document.head.appendChild(linkEl);
-        const themeColorMeta = document.createElement('meta');
-        themeColorMeta.name = 'theme-color';
-        themeColorMeta.content = manifest.theme_color;
-        document.head.appendChild(themeColorMeta);
-        
-        const serviceWorkerCode = `
-            const CACHE_NAME = 'my-life-diary-cache-v4'; // Incremented cache version
-            const urlsToCache = ['/', '/index.html', '/MyLifeDiaryLogo.png'];
-            
-            self.addEventListener('install', (event) => {
-                event.waitUntil(
-                    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-                );
-                self.skipWaiting(); 
-            });
-
-            self.addEventListener('activate', (event) => {
-                const cacheWhitelist = [CACHE_NAME];
-                event.waitUntil(
-                    caches.keys().then((cacheNames) => {
-                        return Promise.all(
-                            cacheNames.map((cacheName) => {
-                                if (cacheWhitelist.indexOf(cacheName) === -1) {
-                                    return caches.delete(cacheName);
-                                }
-                            })
-                        );
-                    }).then(() => self.clients.claim())
-                );
-            });
-
-            self.addEventListener('fetch', (event) => {
-                event.respondWith(
-                    caches.match(event.request).then((response) => response || fetch(event.request))
-                );
-            });
-        `;
+        // This component now only registers the static service worker.
+        // The manifest is linked directly in index.html for reliability.
         if ('serviceWorker' in navigator) {
-            const swBlob = new Blob([serviceWorkerCode], { type: 'application/javascript' });
-            const swUrl = URL.createObjectURL(swBlob);
-            navigator.serviceWorker.register(swUrl)
-                .then(() => console.log('Service Worker registered successfully.'))
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(() => console.log('Service Worker registered successfully from static file.'))
                 .catch(err => console.error('Service Worker registration failed:', err));
         }
     }, []);
     return null;
 };
+
 
 // --- Firebase Configuration ---
 let firebaseConfig, configError = null;
