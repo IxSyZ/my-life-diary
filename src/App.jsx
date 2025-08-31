@@ -29,7 +29,7 @@ const PWASetup = () => {
         const manifest = {
             short_name: "Life Diary",
             name: "My Life Diary",
-            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "200x200" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
+            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
             start_url: ".",
             display: "standalone",
             theme_color: "#2d3748",
@@ -47,13 +47,14 @@ const PWASetup = () => {
         document.head.appendChild(themeColorMeta);
         
         const serviceWorkerCode = `
-            const CACHE_NAME = 'my-life-diary-cache-v3'; // Incremented cache version
+            const CACHE_NAME = 'my-life-diary-cache-v4'; // Incremented cache version
             const urlsToCache = ['/', '/index.html', '/MyLifeDiaryLogo.png'];
             
             self.addEventListener('install', (event) => {
                 event.waitUntil(
                     caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
                 );
+                self.skipWaiting(); 
             });
 
             self.addEventListener('activate', (event) => {
@@ -67,7 +68,7 @@ const PWASetup = () => {
                                 }
                             })
                         );
-                    })
+                    }).then(() => self.clients.claim())
                 );
             });
 
