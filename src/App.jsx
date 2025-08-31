@@ -21,22 +21,73 @@ import {
     Timestamp,
     getDocs
 } from 'firebase/firestore';
-import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette, Download } from 'lucide-react';
+import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, LogOut, Palette, Download, FileDown } from 'lucide-react';
 
 // --- PWA Setup ---
 const PWASetup = () => {
     useEffect(() => {
-        // This component now only registers the static service worker.
-        // The manifest is linked directly in index.html for reliability.
+        const manifest = {
+            short_name: "Life Diary",
+            name: "My Life Diary",
+            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
+            start_url: ".",
+            display: "standalone",
+            theme_color: "#2d3748",
+            background_color: "#2d3748"
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const linkEl = document.createElement('link');
+        linkEl.rel = 'manifest';
+        linkEl.href = manifestUrl;
+        document.head.appendChild(linkEl);
+        const themeColorMeta = document.createElement('meta');
+        themeColorMeta.name = 'theme-color';
+        themeColorMeta.content = manifest.theme_color;
+        document.head.appendChild(themeColorMeta);
+        
+        const serviceWorkerCode = `
+            const CACHE_NAME = 'my-life-diary-cache-v4'; 
+            const urlsToCache = ['/', '/index.html', '/MyLifeDiaryLogo.png'];
+            
+            self.addEventListener('install', (event) => {
+                event.waitUntil(
+                    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+                );
+                self.skipWaiting(); 
+            });
+
+            self.addEventListener('activate', (event) => {
+                const cacheWhitelist = [CACHE_NAME];
+                event.waitUntil(
+                    caches.keys().then((cacheNames) => {
+                        return Promise.all(
+                            cacheNames.map((cacheName) => {
+                                if (cacheWhitelist.indexOf(cacheName) === -1) {
+                                    return caches.delete(cacheName);
+                                }
+                            })
+                        );
+                    }).then(() => self.clients.claim())
+                );
+            });
+
+            self.addEventListener('fetch', (event) => {
+                event.respondWith(
+                    caches.match(event.request).then((response) => response || fetch(event.request))
+                );
+            });
+        `;
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(() => console.log('Service Worker registered successfully from static file.'))
+            const swBlob = new Blob([serviceWorkerCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(swBlob);
+            navigator.serviceWorker.register(swUrl)
+                .then(() => console.log('Service Worker registered successfully.'))
                 .catch(err => console.error('Service Worker registration failed:', err));
         }
     }, []);
     return null;
 };
-
 
 // --- Firebase Configuration ---
 let firebaseConfig, configError = null;
@@ -219,6 +270,45 @@ export default function App() {
         setEditingNote(null); setEditText("");
     };
 
+    // --- CSV Download ---
+    const handleDownloadAll = () => {
+        if (notes.length === 0) {
+            alert("No notes to download.");
+            return;
+        }
+
+        const sortedNotes = [...notes].sort((a, b) => (a.timestamp?.toDate() || 0) - (b.timestamp?.toDate() || 0));
+
+        const headers = ["Date", "Time", "Note"];
+        const csvRows = [headers.join(',')];
+
+        const escapeCsvCell = (cell) => {
+            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                return `"${cell.replace(/"/g, '""')}"`;
+            }
+            return cell;
+        };
+
+        sortedNotes.forEach(note => {
+            const date = note.timestamp?.toDate();
+            const dateString = date ? date.toLocaleDateString() : 'N/A';
+            const timeString = date ? date.toLocaleTimeString() : 'N/A';
+            const noteText = escapeCsvCell(note.text);
+            csvRows.push([dateString, timeString, noteText].join(','));
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'MyLifeDiary_Export.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // --- UI Handlers ---
     const handleInstallClick = () => {
         if (installPromptEvent) {
@@ -276,6 +366,7 @@ export default function App() {
                     <button onClick={() => colorPickerRef.current.click()} className="p-2 rounded-lg" style={{ backgroundColor: subtleBgColor }}><Palette size={20} /></button>
                     <input type="color" ref={colorPickerRef} value={themeColor} onChange={e => setThemeColor(e.target.value)} className="w-0 h-0 opacity-0 absolute"/>
                     <div className="relative"><Languages size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" /><select value={language} onChange={e=>setLanguage(e.target.value)} className="rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none text-sm" style={{backgroundColor: subtleBgColor, color: textColor}}><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
+                    {notes.length > 0 && <button onClick={handleDownloadAll} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><FileDown size={16}/><span className="hidden sm:inline">Download</span></button>}
                     {notes.length > 0 && <button onClick={()=>handleDeleteSelection({type:'all'})} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Trash2 size={16}/><span className="hidden sm:inline">Delete All</span></button>}
                     <button onClick={()=>signOut(auth)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><LogOut size={16}/><span className="hidden sm:inline">Sign Out</span></button>
                 </div>
@@ -324,4 +415,5 @@ export default function App() {
         </div>
     );
 }
+
 
