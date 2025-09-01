@@ -26,63 +26,10 @@ import { Mic, Trash2, Edit, Save, X, ChevronDown, ChevronUp, Languages, Search, 
 // --- PWA Setup ---
 const PWASetup = () => {
     useEffect(() => {
-        const manifest = {
-            short_name: "Life Diary",
-            name: "My Life Diary",
-            icons: [{ src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "192x192" }, { src: "/MyLifeDiaryLogo.png", type: "image/png", sizes: "512x512" }],
-            start_url: ".",
-            display: "standalone",
-            theme_color: "#2d3748",
-            background_color: "#2d3748"
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(manifestBlob);
-        const linkEl = document.createElement('link');
-        linkEl.rel = 'manifest';
-        linkEl.href = manifestUrl;
-        document.head.appendChild(linkEl);
-        const themeColorMeta = document.createElement('meta');
-        themeColorMeta.name = 'theme-color';
-        themeColorMeta.content = manifest.theme_color;
-        document.head.appendChild(themeColorMeta);
-        
-        const serviceWorkerCode = `
-            const CACHE_NAME = 'my-life-diary-cache-v4'; 
-            const urlsToCache = ['/', '/index.html', '/MyLifeDiaryLogo.png'];
-            
-            self.addEventListener('install', (event) => {
-                event.waitUntil(
-                    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-                );
-                self.skipWaiting(); 
-            });
-
-            self.addEventListener('activate', (event) => {
-                const cacheWhitelist = [CACHE_NAME];
-                event.waitUntil(
-                    caches.keys().then((cacheNames) => {
-                        return Promise.all(
-                            cacheNames.map((cacheName) => {
-                                if (cacheWhitelist.indexOf(cacheName) === -1) {
-                                    return caches.delete(cacheName);
-                                }
-                            })
-                        );
-                    }).then(() => self.clients.claim())
-                );
-            });
-
-            self.addEventListener('fetch', (event) => {
-                event.respondWith(
-                    caches.match(event.request).then((response) => response || fetch(event.request))
-                );
-            });
-        `;
+        // The manifest is linked directly in index.html for reliability.
         if ('serviceWorker' in navigator) {
-            const swBlob = new Blob([serviceWorkerCode], { type: 'application/javascript' });
-            const swUrl = URL.createObjectURL(swBlob);
-            navigator.serviceWorker.register(swUrl)
-                .then(() => console.log('Service Worker registered successfully.'))
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(() => console.log('Service Worker registered successfully from static file.'))
                 .catch(err => console.error('Service Worker registration failed:', err));
         }
     }, []);
@@ -106,32 +53,67 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// --- Translation Dictionary ---
+const translations = {
+    en: {
+        signInSubtitle: "Your personal voice-powered journal.",
+        signInButton: "Sign in with Google",
+        installApp: "Install App",
+        download: "Download",
+        deleteAll: "Delete All",
+        signOut: "Sign Out",
+        searchPlaceholder: "Search notes...",
+        today: "Today",
+        noNotesToday: "No entries for today. Hold the mic to start recording your thoughts!",
+        noMatchToday: "No matching notes found for today.",
+        pastEntries: "Past Entries",
+        confirmDeletionTitle: "Confirm Deletion",
+        confirmDeleteAll: "Are you sure you want to delete all your notes? This action cannot be undone.",
+        confirmDeleteYear: (year) => `Are you sure you want to delete all notes from ${year}?`,
+        confirmDeleteMonth: (month, year) => `Are you sure you want to delete all notes from ${month} ${year}?`,
+        cancel: "Cancel",
+        delete: "Delete",
+        noNotesToDownload: "No notes to download.",
+        dbErrorPermission: "Permission Denied: Your Firestore security rules have likely expired. Please update them in the Firebase console to allow access.",
+        dbErrorGeneric: (msg) => `Database error: ${msg}`
+    },
+    fr: {
+        signInSubtitle: "Votre journal personnel à commande vocale.",
+        signInButton: "Se connecter avec Google",
+        installApp: "Installer l'appli",
+        download: "Télécharger",
+        deleteAll: "Tout supprimer",
+        signOut: "Se déconnecter",
+        searchPlaceholder: "Rechercher des notes...",
+        today: "Aujourd'hui",
+        noNotesToday: "Aucune entrée pour aujourd'hui. Maintenez le micro pour enregistrer vos pensées !",
+        noMatchToday: "Aucune note correspondante trouvée pour aujourd'hui.",
+        pastEntries: "Entrées précédentes",
+        confirmDeletionTitle: "Confirmer la suppression",
+        confirmDeleteAll: "Êtes-vous sûr de vouloir supprimer toutes vos notes ? Cette action est irréversible.",
+        confirmDeleteYear: (year) => `Êtes-vous sûr de vouloir supprimer toutes les notes de ${year} ?`,
+        confirmDeleteMonth: (month, year) => `Êtes-vous sûr de vouloir supprimer toutes les notes de ${month} ${year} ?`,
+        cancel: "Annuler",
+        delete: "Supprimer",
+        noNotesToDownload: "Aucune note à télécharger.",
+        dbErrorPermission: "Autorisation refusée : Vos règles de sécurité Firestore ont probablement expiré. Veuillez les mettre à jour dans la console Firebase pour autoriser l'accès.",
+        dbErrorGeneric: (msg) => `Erreur de base de données : ${msg}`
+    }
+};
+
 // --- Color Utility Functions ---
 const getTextColor = (bgColor) => {
     if (!bgColor) return '#ffffff';
     const color = (bgColor.charAt(0) === '#') ? bgColor.substring(1, 7) : bgColor;
-    const r = parseInt(color.substring(0, 2), 16);
-    const g = parseInt(color.substring(2, 4), 16);
-    const b = parseInt(color.substring(4, 6), 16);
-    const uicolors = [r / 255, g / 255, b / 255];
-    const c = uicolors.map((col) => {
-        if (col <= 0.03928) return col / 12.92;
-        return Math.pow((col + 0.055) / 1.055, 2.4);
-    });
-    const L = (0.2126 * c[0]) + (0.7152 * c[1]) + (0.0722 * c[2]);
-    return (L > 0.179) ? '#000000' : '#ffffff';
+    const r = parseInt(color.substring(0, 2), 16), g = parseInt(color.substring(2, 4), 16), b = parseInt(color.substring(4, 6), 16);
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return (luma > 128) ? '#000000' : '#ffffff';
 };
 
 const shadeColor = (color, percent) => {
-    let R = parseInt(color.substring(1,3),16);
-    let G = parseInt(color.substring(3,5),16);
-    let B = parseInt(color.substring(5,7),16);
-    R = parseInt(R * (100 + percent) / 100);
-    G = parseInt(G * (100 + percent) / 100);
-    B = parseInt(B * (100 + percent) / 100);
-    R = (R<255)?R:255;  
-    G = (G<255)?G:255;  
-    B = (B<255)?B:255;  
+    let R = parseInt(color.substring(1,3),16), G = parseInt(color.substring(3,5),16), B = parseInt(color.substring(5,7),16);
+    R = parseInt(R * (100 + percent) / 100); G = parseInt(G * (100 + percent) / 100); B = parseInt(B * (100 + percent) / 100);
+    R = (R<255)?R:255; G = (G<255)?G:255; B = (B<255)?B:255;
     const RR = ((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16));
     const GG = ((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16));
     const BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
@@ -139,14 +121,14 @@ const shadeColor = (color, percent) => {
 };
 
 // --- SignIn Component ---
-const SignIn = ({ themeColor }) => (
+const SignIn = ({ themeColor, t }) => (
     <div className="min-h-screen flex flex-col items-center justify-center text-center p-4 transition-colors duration-300" style={{ backgroundColor: themeColor, color: getTextColor(themeColor) }}>
         <img src="/MyLifeDiaryLogo.png" alt="Logo" className="h-24 w-24 rounded-full mb-6" />
         <h1 className="text-5xl font-bold tracking-tight mb-4">My Life Diary</h1>
-        <p className="opacity-80 mb-8 text-lg">Your personal voice-powered journal.</p>
+        <p className="opacity-80 mb-8 text-lg">{t('signInSubtitle')}</p>
         <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => alert(e.message))} className="flex items-center gap-4 bg-white/20 backdrop-blur-sm font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-shadow" style={{ color: getTextColor(themeColor) }}>
             <svg className="w-6 h-6" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
-            Sign in with Google
+            {t('signInButton')}
         </button>
     </div>
 );
@@ -171,6 +153,12 @@ export default function App() {
     const colorPickerRef = useRef(null);
     const recognitionRef = useRef(null);
     const transcriptRef = useRef("");
+    
+    const langCode = language.startsWith('fr') ? 'fr' : 'en';
+    const t = (key, ...args) => {
+        const text = translations[langCode][key];
+        return typeof text === 'function' ? text(...args) : text;
+    };
 
     // --- PWA Install Prompt Handling ---
     useEffect(() => {
@@ -182,15 +170,16 @@ export default function App() {
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
-    // --- Theme Management ---
+    // --- Theme & Language Management ---
     useEffect(() => {
         const savedColor = localStorage.getItem('life-diary-theme-color') || '#2d3748';
+        const savedLang = localStorage.getItem('life-diary-language') || 'en-US';
         setThemeColor(savedColor);
+        setLanguage(savedLang);
     }, []);
 
-    useEffect(() => {
-        localStorage.setItem('life-diary-theme-color', themeColor);
-    }, [themeColor]);
+    useEffect(() => { localStorage.setItem('life-diary-theme-color', themeColor); }, [themeColor]);
+    useEffect(() => { localStorage.setItem('life-diary-language', language); }, [language]);
 
     // --- Authentication ---
     useEffect(() => {
@@ -204,22 +193,16 @@ export default function App() {
     useEffect(() => {
         if (!user || configError) return setNotes([]);
         const q = query(collection(db, `users/${user.uid}/notes`));
-        const unsub = onSnapshot(q, 
-            (snap) => {
-                setFirestoreError(null);
-                setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0)))
-            },
-            (error) => {
-                 if (error.code === 'permission-denied') {
-                    setFirestoreError("Permission Denied: Your Firestore security rules have likely expired. Please update them in the Firebase console to allow access.");
-                 } else {
-                    setFirestoreError(`Database error: ${error.message}`);
-                 }
-                 console.error("Firestore snapshot error:", error);
-            }
-        );
+        const unsub = onSnapshot(q, (snap) => {
+            setFirestoreError(null);
+            setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0)));
+        }, (error) => {
+             if (error.code === 'permission-denied') setFirestoreError(t('dbErrorPermission'));
+             else setFirestoreError(t('dbErrorGeneric', error.message));
+             console.error("Firestore snapshot error:", error);
+        });
         return () => unsub();
-    }, [user]);
+    }, [user, language]); // Add language dependency to refetch error messages in correct lang
     
     // --- Speech Recognition Setup ---
     useEffect(() => {
@@ -235,14 +218,11 @@ export default function App() {
 
     // --- Search Expansion Effect ---
     useEffect(() => {
-        if (searchTerm.trim() === '') {
-            setExpandedItems({});
-            return;
-        }
+        if (searchTerm.trim() === '') return setExpandedItems({});
         const matches = notes.filter(n => n.text.toLowerCase().includes(searchTerm.toLowerCase()) && n.timestamp?.toDate().toDateString() !== new Date().toDateString());
         if (matches.length > 0) setShowPastNotes(true);
         const newExpanded = {};
-        matches.forEach(n => { const d = n.timestamp.toDate(); newExpanded[d.getFullYear()] = true; newExpanded[`${d.getFullYear()}-${d.toLocaleString('default', { month: 'long' })}`] = true; });
+        matches.forEach(n => { const d = n.timestamp.toDate(); newExpanded[d.getFullYear()] = true; newExpanded[`${d.getFullYear()}-${d.toLocaleString(langCode, { month: 'long' })}`] = true; });
         setExpandedItems(newExpanded);
     }, [searchTerm]);
 
@@ -255,7 +235,7 @@ export default function App() {
         const toDelete = showDeleteConfirm.type === 'all' ? notes : notes.filter(n => {
             const d = n.timestamp?.toDate(); if(!d) return false;
             if (showDeleteConfirm.type === 'year') return d.getFullYear() === showDeleteConfirm.year;
-            if (showDeleteConfirm.type === 'month') return d.getFullYear() === showDeleteConfirm.year && d.toLocaleString('default', { month: 'long' }) === showDeleteConfirm.month;
+            if (showDeleteConfirm.type === 'month') return d.getFullYear() === showDeleteConfirm.year && d.toLocaleString(langCode, { month: 'long' }) === showDeleteConfirm.month;
             return false;
         });
         if(toDelete.length === 0) return setShowDeleteConfirm(null);
@@ -272,31 +252,21 @@ export default function App() {
 
     // --- CSV Download ---
     const handleDownloadAll = () => {
-        if (notes.length === 0) {
-            alert("No notes to download.");
-            return;
-        }
-
+        if (notes.length === 0) return alert(t('noNotesToDownload'));
         const sortedNotes = [...notes].sort((a, b) => (a.timestamp?.toDate() || 0) - (b.timestamp?.toDate() || 0));
-
         const headers = ["Date", "Time", "Note"];
         const csvRows = [headers.join(',')];
-
         const escapeCsvCell = (cell) => {
-            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
-                return `"${cell.replace(/"/g, '""')}"`;
-            }
+            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) return `"${cell.replace(/"/g, '""')}"`;
             return cell;
         };
-
         sortedNotes.forEach(note => {
             const date = note.timestamp?.toDate();
-            const dateString = date ? date.toLocaleDateString() : 'N/A';
-            const timeString = date ? date.toLocaleTimeString() : 'N/A';
+            const dateString = date ? date.toLocaleDateString(langCode) : 'N/A';
+            const timeString = date ? date.toLocaleTimeString(langCode) : 'N/A';
             const noteText = escapeCsvCell(note.text);
             csvRows.push([dateString, timeString, noteText].join(','));
         });
-
         const csvString = csvRows.join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -310,14 +280,7 @@ export default function App() {
     };
 
     // --- UI Handlers ---
-    const handleInstallClick = () => {
-        if (installPromptEvent) {
-            installPromptEvent.prompt();
-            installPromptEvent.userChoice.then(() => {
-                setInstallPromptEvent(null);
-            });
-        }
-    };
+    const handleInstallClick = () => { if (installPromptEvent) installPromptEvent.prompt().then(() => setInstallPromptEvent(null)); };
     const handleRecordStart = () => { if (micError || !recognitionRef.current) return; transcriptRef.current = ""; setIsRecording(true); recognitionRef.current.start(); };
     const handleRecordStop = () => { if (micError || !recognitionRef.current || !isRecording) return; recognitionRef.current.stop(); };
     const toggleExpand = key => setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
@@ -332,23 +295,26 @@ export default function App() {
     const todayNotes = filteredNotes.filter(n => n.timestamp?.toDate().toDateString() === new Date().toDateString());
     const pastNotesRaw = filteredNotes.filter(n => n.timestamp?.toDate().toDateString() !== new Date().toDateString());
     const structuredPastNotes = pastNotesRaw.reduce((acc, note) => {
-        const d=note.timestamp?.toDate();if(!d)return acc;const y=d.getFullYear(),m=d.toLocaleString('default',{month:'long'}),day=d.getDate();
+        const d=note.timestamp?.toDate();if(!d)return acc;const y=d.getFullYear(),m=d.toLocaleString(langCode,{month:'long'}),day=d.getDate();
         if(!acc[y])acc[y]={};if(!acc[y][m])acc[y][m]={};if(!acc[y][m][day])acc[y][m][day]=[];acc[y][m][day].push(note);return acc;
     }, {});
 
     // --- Render Logic ---
     if (configError) return <div className="min-h-screen flex items-center justify-center p-4"><div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg max-w-lg">{configError}</div></div>;
     if (!authReady) return <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: themeColor }}>Loading...</div>;
-    if (!user) return <SignIn themeColor={themeColor} />;
+    if (!user) return <SignIn themeColor={themeColor} t={t} />;
 
-    let confirmText = 'Are you sure you want to delete all your notes? This action cannot be undone.';
-    if(showDeleteConfirm) { if(showDeleteConfirm.type === 'year') confirmText = `Delete all notes from ${showDeleteConfirm.year}?`; if(showDeleteConfirm.type === 'month') confirmText = `Delete all notes from ${showDeleteConfirm.month} ${showDeleteConfirm.year}?`; }
+    let confirmText = t('confirmDeleteAll');
+    if(showDeleteConfirm) { 
+        if(showDeleteConfirm.type === 'year') confirmText = t('confirmDeleteYear', showDeleteConfirm.year);
+        if(showDeleteConfirm.type === 'month') confirmText = t('confirmDeleteMonth', showDeleteConfirm.month, showDeleteConfirm.year);
+    }
 
     const renderNote = (note) => (
         <div key={note.id} className="p-4 rounded-lg flex justify-between items-start gap-4 break-words shadow-sm" style={{ backgroundColor: subtleBgColor, color: textColor }}>
             <div className="flex-grow">
                 {editingNote?.id===note.id ? <textarea value={editText} onChange={e=>setEditText(e.target.value)} className="w-full bg-transparent border-b-2 focus:outline-none" style={{ borderColor: accentColor }} /> : <p>{note.text}</p>}
-                <p className="text-sm mt-2 opacity-60">{note.timestamp?.toDate().toLocaleString() || 'Just now'}</p>
+                <p className="text-sm mt-2 opacity-60">{note.timestamp?.toDate().toLocaleString(langCode) || 'Just now'}</p>
             </div>
             <div className="flex items-center space-x-2 flex-shrink-0">
                 {editingNote?.id===note.id ? (<><button onClick={saveEdit}><Save size={20}/></button><button onClick={()=>setEditingNote(null)}><X size={20}/></button></>) : (<><button onClick={()=>startEditing(note)}><Edit size={20}/></button><button onClick={()=>deleteNote(note.id)}><Trash2 size={20}/></button></>)}
@@ -362,23 +328,23 @@ export default function App() {
             <header className="p-4 sm:p-6 border-b flex flex-wrap justify-between items-center gap-4 sticky top-0 backdrop-blur-sm z-10" style={{ borderColor: subtleBgColor, backgroundColor: shadeColor(themeColor, -5) + '80' }}>
                 <div className="flex items-center gap-3"><img src="/MyLifeDiaryLogo.png" alt="Logo" className="h-10 w-10 rounded-full" /><h1 className="text-3xl font-bold tracking-tight">My Life Diary</h1></div>
                 <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-                    {installPromptEvent && <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Download size={16}/><span className="hidden sm:inline">Install App</span></button>}
+                    {installPromptEvent && <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Download size={16}/><span className="hidden sm:inline">{t('installApp')}</span></button>}
                     <button onClick={() => colorPickerRef.current.click()} className="p-2 rounded-lg" style={{ backgroundColor: subtleBgColor }}><Palette size={20} /></button>
                     <input type="color" ref={colorPickerRef} value={themeColor} onChange={e => setThemeColor(e.target.value)} className="w-0 h-0 opacity-0 absolute"/>
                     <div className="relative"><Languages size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" /><select value={language} onChange={e=>setLanguage(e.target.value)} className="rounded-lg pl-9 pr-4 py-2 appearance-none focus:outline-none text-sm" style={{backgroundColor: subtleBgColor, color: textColor}}><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
-                    {notes.length > 0 && <button onClick={handleDownloadAll} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><FileDown size={16}/><span className="hidden sm:inline">Download</span></button>}
-                    {notes.length > 0 && <button onClick={()=>handleDeleteSelection({type:'all'})} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Trash2 size={16}/><span className="hidden sm:inline">Delete All</span></button>}
-                    <button onClick={()=>signOut(auth)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><LogOut size={16}/><span className="hidden sm:inline">Sign Out</span></button>
+                    {notes.length > 0 && <button onClick={handleDownloadAll} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><FileDown size={16}/><span className="hidden sm:inline">{t('download')}</span></button>}
+                    {notes.length > 0 && <button onClick={()=>handleDeleteSelection({type:'all'})} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><Trash2 size={16}/><span className="hidden sm:inline">{t('deleteAll')}</span></button>}
+                    <button onClick={()=>signOut(auth)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{backgroundColor: subtleBgColor}}><LogOut size={16}/><span className="hidden sm:inline">{t('signOut')}</span></button>
                 </div>
             </header>
 
             <main className="flex-grow p-4 sm:p-6 overflow-y-auto pb-32"><div className="max-w-3xl mx-auto">
                 {firestoreError && <div className="mb-4 bg-red-100/20 border border-red-400 text-red-400 px-4 py-3 rounded-lg"><strong className="font-bold">Database Error! </strong><span className="block sm:inline">{firestoreError}</span></div>}
-                <div className="relative mb-6"><Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={20}/><input type="text" placeholder="Search notes..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border rounded-lg py-3 pl-12 pr-4 focus:outline-none focus:ring-2" style={{backgroundColor: subtleBgColor, borderColor: accentColor, ringColor: accentColor}} /></div>
-                <h2 className="text-2xl font-semibold border-b-2 pb-2 mb-4" style={{borderColor: accentColor}}>Today</h2>
-                <div className="space-y-4">{todayNotes.length > 0 ? todayNotes.map(renderNote) : <p className="opacity-60 text-center py-8">{searchTerm?'No matching notes.':'No entries today.'}</p>}</div>
+                <div className="relative mb-6"><Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={20}/><input type="text" placeholder={t('searchPlaceholder')} value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border rounded-lg py-3 pl-12 pr-4 focus:outline-none focus:ring-2" style={{backgroundColor: subtleBgColor, borderColor: accentColor, ringColor: accentColor}} /></div>
+                <h2 className="text-2xl font-semibold border-b-2 pb-2 mb-4" style={{borderColor: accentColor}}>{t('today')}</h2>
+                <div className="space-y-4">{todayNotes.length > 0 ? todayNotes.map(renderNote) : <p className="opacity-60 text-center py-8">{searchTerm? t('noMatchToday') : t('noNotesToday')}</p>}</div>
                 {pastNotesRaw.length > 0 && (<div className="mt-12">
-                    <button onClick={()=>setShowPastNotes(!showPastNotes)} className="w-full flex justify-between items-center text-left text-2xl font-semibold border-b-2 pb-2 mb-4" style={{borderColor: accentColor}}><span>Past Entries</span>{showPastNotes ? <ChevronUp/> : <ChevronDown/>}</button>
+                    <button onClick={()=>setShowPastNotes(!showPastNotes)} className="w-full flex justify-between items-center text-left text-2xl font-semibold border-b-2 pb-2 mb-4" style={{borderColor: accentColor}}><span>{t('pastEntries')}</span>{showPastNotes ? <ChevronUp/> : <ChevronDown/>}</button>
                     {showPastNotes && (<div className="space-y-2 mt-4 pl-2">
                         {Object.keys(structuredPastNotes).sort((a,b)=>b-a).map(year => (<div key={year} className="py-2">
                             <div className="w-full flex items-center justify-between text-left text-xl font-medium"><button onClick={()=>toggleExpand(year)} className="flex items-center flex-grow transition-opacity hover:opacity-80">{expandedItems[year] ? <ChevronUp size={20} className="mr-2"/> : <ChevronDown size={20} className="mr-2"/>}{year}</button><button onClick={()=>handleDeleteSelection({type:'year',year:parseInt(year)})} className="p-1 opacity-50 hover:opacity-100 hover:bg-white/10 rounded-full"><Trash2 size={16}/></button></div>
@@ -404,11 +370,11 @@ export default function App() {
 
             {showDeleteConfirm && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                 <div className="rounded-lg p-6 max-w-sm w-full text-center shadow-2xl" style={{backgroundColor: subtleBgColor, color: textColor}}>
-                    <h3 className="text-xl font-bold mb-4">Confirm Deletion</h3>
+                    <h3 className="text-xl font-bold mb-4">{t('confirmDeletionTitle')}</h3>
                     <p className="opacity-80 mb-6">{confirmText}</p>
                     <div className="flex justify-center gap-4">
-                        <button onClick={()=>setShowDeleteConfirm(null)} className="px-6 py-2 rounded-lg transition-opacity hover:opacity-80" style={{backgroundColor: accentColor}}>Cancel</button>
-                        <button onClick={handleConfirmDelete} className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors">Delete</button>
+                        <button onClick={()=>setShowDeleteConfirm(null)} className="px-6 py-2 rounded-lg transition-opacity hover:opacity-80" style={{backgroundColor: accentColor}}>{t('cancel')}</button>
+                        <button onClick={handleConfirmDelete} className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors">{t('delete')}</button>
                     </div>
                 </div>
             </div>)}
